@@ -31,7 +31,7 @@ function neighbours_replica(nx::Int,ny::Int,Lx::Int,Ly::Int,l::Int)
 end
 
 function local_ratio(c::AbstractArray{Bool}, J::Float64, beta::Float64, l::Int64)
-    # c : spin configuration of the double copy
+    # c : a bitarray representing the spin configuration of the double copy
     # J: isotropic spin-spin coupling
     # beta : inverse temperature
     # l : size of the subsystem A
@@ -85,7 +85,7 @@ function swaperator_samples(Lx::Int64, Ly::Int64,n_sweeps::Int64, beta::Float64,
         size_ratio = 0.0 #ratio size of cluster
         stack = Tuple{Int, Int}[]
         for i  in 1:n_sweeps
-            size_ratio += cluster_update!(config, stack, beta, J, l)
+            size_ratio += cluster_update!(config, stack, beta, J, l) #cluster_update can be found in the MonteCarlo module
             
             if meas_func == nothing
                 observable = NaN
@@ -99,4 +99,50 @@ function swaperator_samples(Lx::Int64, Ly::Int64,n_sweeps::Int64, beta::Float64,
 end
 
 
-end 
+end #end module
+
+# An example to how to use this module to extract Renyi Entropy---------------------------------------------------------------------------
+Lx = 20
+Ly = 100
+beta = 1/2.269
+J = 1.0
+
+l = 0
+delta = 2
+Renyi2 = []
+Renyi2_error = []
+S = 0.0
+S_error = 0.0
+
+n_sweeps = 500000
+
+#A sanity check: the 2-Renyi entropy should be zero for l = 0 and delta = 0
+ratios, acceptance_rate = swaperator_samples(Lx, 2*Ly, n_sweeps, beta, J, 0, 0; meas_func = ratio)
+R_bin = make_bins(ratios, 100)
+mean_R, std_R = meas_stat(R_bin)
+println(mean_R) #to monitor progress
+S -= log(mean_R)
+push!(Renyi2, S)
+S_error = sqrt(S_error^2 + std_R^2/mean_R^2) #error propagation through the log
+push!(Renyi2_error, S_error)
+println(S_error) #to monitor progress
+
+#looping over the subsystem size (incrementing by delta each time)
+for l=0:delta:Lx-2
+    ratios, acceptance_rate = swaperator_samples(Lx, 2*Ly, n_sweeps, beta, J, l, delta; meas_func = ratio)
+    R_bin = make_bins(ratios, 100) # this function can be found in the MonteCarlo module
+
+    mean_R, std_R = meas_stat(R_bin) # this function can be found in the MonteCarlo module
+    println(mean_R) #to monitor progress
+    S -= log(mean_R)
+    push!(Renyi2, S)
+    
+    S_error = sqrt(S_error^2 + std_R^2/mean_R^2) #error propagation through the log
+    println(S_error) #to monitor
+    push!(Renyi2_error, S_error)
+end
+
+plot(0:2:Lx,Renyi2, yerror=Renyi2_error, ylims=(0,0.65), legend = false, xaxis =  (font(15, "Calibri")), yaxis =  (font(15, "Calibri")))
+ylabel!("Renyi Entropy")
+xlabel!("Subsystem size")
+#End example ------------------------------------------------------------------------------------------------------------------
